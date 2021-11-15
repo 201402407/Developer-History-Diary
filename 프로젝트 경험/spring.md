@@ -105,6 +105,45 @@ Java와 Spring framework를 활용한 백엔드 서버 개발 스킬을 향상�
 <br/>
 <br/>
 
+### 롯데카드 티니패스  
+
+-   keyword
+    -   트러블슈팅 및 해결
+    -   개선
+    -   기술(깊이)
+    -   롯데카드
+
+<hr/>
+
+
+상황> SELECT 값 조회(트랜잭션 적용)
+    1-1) 존재하는 경우 -> counting + 1 후 update
+    1-2) 존재하지 않는 경우 -> counting 1로 하는 값 insert
+
+문제> Junit으로 ThreadPool을 만들고, Thread 동시성 테스트를 진행함. 
+    1) 존재하는 값 조회 시 -> counting 더해지지 않고 무조건 counting 2(1 + 1)로 저장됨. -> 동시에 같은 SELECT 후 UPDATE를 진행하기 때문에 전부 counting 1로 READ 했다.
+    2) 존재하지 않는 값 조회 시 -> 이미 존재하는 PK값 INSERT 시도로 Exception 발생.
+
+원인 추적> 
+    1) 동시성 문제. 어떤 Thread가 DB 데이터를 갱신해도 이를 다른 Thread가 인지하지 못하고 데이터를 UPDATE함  
+    2) 1)과 동일하게 어떤 Thread에서 이미 INSERT한 값을 똑같이 다른 Thread에서도 INSERT하기 때문에 Duplicate PK Error 발생
+
+해결>
+    1) 동시성을 위한 Thread Lock?
+        -> method 하나에만 lock(Synchronize)을 걸어도 객체 전체에 lock이 적용되기 때문에 Service를 Bean 싱글톤 객체로 사용하는 Spring에서는 치명적인 이슈가 될 것 같다.
+        -> 여러 인스턴스의 서버를 가질 수 있기 때문에 로드밸런싱 되는 다른 인스턴스의 서버 애플리케이션에서 요청을 받으면 Thread Lock이 소용이 없어진다.
+        -> 기각.
+    2) DB Lock
+        -> 
+
+- https://bcho.tistory.com/226
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+
 *작성중*
 <br/>
 

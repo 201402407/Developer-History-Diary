@@ -44,15 +44,17 @@
 고민 끝에 어노테이션 하나로 호출 가능한 AOP를 사용하기로 결정했습니다. 이는 인터셉터 이후 호출되기 때문에 사전에 로그인 정보처리도 가능하고, 로그인 체크에 대한 모듈화로 공통화를 이룰 수 있어 단점을 줄인다고 판단했습니다.
 우선, AOP 의존성(AspectJ + CGLib)을 추가한 뒤 Aspect 클래스를 만들고, 로그인 체크 메소드를 구현한 뒤 Before JoinPoint Annotation과 원하는 메소드와 패키지를 찾아 PointCut Annotation을 생성해 Aspect를 주입시켰습니다. 
 이를 통해 반복적인 로그인 체크 코딩작업을 없앴고, 정회원 / 준회원 구분 등 로그인 체크 내의 새로운 로직도 한 번에 적용하며 추가 이슈를 빠르게 해결했습니다. 또한, PVO, RVO 로깅, 카드신청정보저장 등 각 공통작업을 다양한 JoinPoint Annotation을 활용하여 개발일정을 줄일 수 있었습니다. 
-(Spring AOP vs AspectJ)
-(간단하고, Bean 객체에만 한정(인터페이스를 구현한 클래스) vs 복잡하고(바이트코드 단위 AOP) 완전한 AOP. 인터페이스 구현한 클래스 외에도 가능)
-(Proxy 기반 AOP vs CGLiB 기반 AOP -> Proxy 사용X)
-(RunTime Weaving vs CompileTime Weaving)
-Aspect: 여러 객체 또는 로직에 공통적으로 적용되는 공통 관심 사항을 주요 관심에서 분리시키는 것. 즉, 핵심에서 부가적인 기능을 분리시키는 것.
-Aspect = Advice + PointCut
-Advice = 공통 기능 각각의 로직
+
+(Spring AOP vs AspectJ)<br>
+(간단하고, Bean 객체에만 한정(인터페이스를 구현한 클래스) vs 복잡하고(바이트코드 단위 AOP) 완전한 AOP. 인터페이스 구현한 클래스 외에도 가능)<br>
+(Proxy 기반 AOP vs CGLiB 기반 AOP -> Proxy 사용X)<br>
+(RunTime Weaving vs CompileTime Weaving)<br>
+Aspect: 여러 객체 또는 로직에 공통적으로 적용되는 공통 관심 사항을 주요 관심에서 분리시키는 것. 즉, 핵심에서 부가적인 기능을 분리시키는 것.<br>
+Aspect = Advice + PointCut<br>
+Advice = 공통 기능 각각의 로직<br>
+PointCut = Advice가 적용될 메소드 또는 범위(정규표현식)<br>
 JoinPoint = Advice를 실행시킬 시점(Before, After, After Returning, After Throwing 등)
-PointCut = Advice가 적용될 메소드 또는 범위(정규표현식)
+
 
 - https://codevang.tistory.com/244
 - https://bcho.tistory.com/226

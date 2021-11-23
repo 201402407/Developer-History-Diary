@@ -165,58 +165,48 @@ Java와 Spring framework를 활용한 백엔드 서버 개발 스킬을 향상�
 
 <hr/>
 
+[사이드 프로젝트에서 검색어 검색 횟수를 저장할 때의 동시성 이슈 발생]
 
-상황> 
+상황: 검색어 검색 횟수 누적 저장(트랜잭션 적용)
+    1) 검색어(PK), 검색 횟수 컬럼을 가진 Table에서 검색어로 검색 횟수 SELECT 조회.
+    2-1) 존재하는 경우 -> 검색 횟수 + 1 후 UPDATE
+    2-2) 존재하지 않는 경우 -> 검색 횟수 = 1로 하는 값 INSERT
 
-SELECT 값 조회(트랜잭션 적용)
+문제: Junit으로 ThreadPool을 만들고, 5개의 Thread로 동시성 테스트를 진행함.
+    1) DB에 존재하는 검색어 조회 시 -> 검색 횟수 + 5로 더해지지 않고 무조건 검색 횟수 + 1로 저장됨. -> 동시에 SELECT 후 UPDATE를 진행하기 때문에 전부 같은 검색 횟수를 READ 한 후 UPDATE함.
+    2) DB에 존재하지 않는 검색어 조회 시 -> 이미 존재하는 PK값 INSERT 시도로 Exception 발생.
 
-    1-1) 존재하는 경우 -> counting + 1 후 update
+문제 원인:
+    1) 동시성 문제. 어떤 Thread가 DB 데이터를 갱신해도 이를 다른 Thread가 인지하지 못하고 데이터를 UPDATE함.
+    2) 1)과 동일하게 어떤 Thread에서 이미 INSERT한 값을 똑같이 다른 Thread에서도 INSERT하기 때문에 Duplicate PK Error 발생.
 
-    1-2) 존재하지 않는 경우 -> counting 1로 하는 값 insert
-
-문제> 
-
-Junit으로 ThreadPool을 만들고, Thread 동시성 테스트를 진행함. 
-
-    1) 존재하는 값 조회 시 -> counting 더해지지 않고 무조건 counting 2(1 + 1)로 저장됨. -> 동시에 같은 SELECT 후 UPDATE를 진행하기 때문에 전부 counting 1로 READ 했다.
-
-    2) 존재하지 않는 값 조회 시 -> 이미 존재하는 PK값 INSERT 시도로 Exception 발생.
-
-원인 추적> 
-
-    1) 동시성 문제. 어떤 Thread가 DB 데이터를 갱신해도 이를 다른 Thread가 인지하지 못하고 데이터를 UPDATE함  
+해결 과정: 순서대로 개발 및 테스트 진행
+    1) 동시성을 위해 Class에 Thread 단위 Locking
+        -> method 하나에만 lock(Synchronize)을 걸어도 객체 전체에 lock이 적용되기 때문에 Service를 Bean 싱글톤 객체로 사용하는 Spring에서는 치명적인 이슈가 됨.
+        -> 여러 인스턴스의 서버를 가질 수 있기 때문에 로드밸런싱 되는 다른 인스턴스의 서버 애플리케이션에서 요청을 받으면 Thread Lock이 소용이 없어짐.
+        -> 확장성을 고려했을 때, 부적합하다고 판단해서 적용하지 않음.
     
-    2) 1)과 동일하게 어떤 Thread에서 이미 INSERT한 값을 똑같이 다른 Thread에서도 INSERT하기 때문에 Duplicate PK Error 발생
-
-해결>
-
-    1) 동시성을 위한 Thread Lock?
-    
-        -> method 하나에만 lock(Synchronize)을 걸어도 객체 전체에 lock이 적용되기 때문에 Service를 Bean 싱글톤 객체로 사용하는 Spring에서는 치명적인 이슈가 될 것 같다.
-        -> 여러 인스턴스의 서버를 가질 수 있기 때문에 로드밸런싱 되는 다른 인스턴스의 서버 애플리케이션에서 요청을 받으면 Thread Lock이 소용이 없어진다.
-        -> 기각.
-    
-    2) DB Lock
+    2) DB Locking
         -> Transaction isolation level 적용
-            -> 위 상황에 만족하는 고립 레벨이 없다.
-            -> DB에도 MVCC를 적용해야하는데, h2는 1.14.200 버전을 사용해서 198버전 이상부터는 단순히 MVCC=true가 아닌 별도 설정이 필요하다.
-            -> 해당 엔티티와 해당 SELECT에만 적용하고 싶다는 조건과 결이 다름
-        -> SelectForUpdate repositry method와 비관적 잠금(PESSIMISTIC_WRITE) 적용
+            -> 위 상황에 만족하는 고립 레벨이 없음.
+            -> DB에도 MVCC를 적용해야하는데, h2는 1.14.200 버전을 사용해서 198버전 이상부터는 단순히 MVCC=true가 아닌 별도 설정이 필요함.
+            -> 해당 엔티티와 해당 SELECT에만 적용하고 싶었기 때문에 맞지 않다고 판단함.
+        -> SelectForUpdate repository method와 비관적 잠금(PESSIMISTIC_WRITE) 적용
             -> 교착 상태 발생 가능성 높고, 나중에가면 하나의 레코드에 READ하는 Thread(트랜잭션)가 많을 수 있음.
             -> 위와 같은 이유로 비관적 잠금으로 인해 하나의 Thread가 Transaction할 동안 대기하는 것은 효율성이 매우 저하됨.
         -> 낙관적 잠금(Optimistic Lock), @Version 적용
-            -> Update의 정합성을 위해 다른 트랜잭션이 Update시 버전 변경시키고, 만약 SELECT 당시 가져온 버전과 현재 DB에 반영된 버전이 다를 경우 예외 발생시키는 @Version 추가
-            -> 이 때 트랜잭션을 종료시키는 것이 아니라 최신 버전의 값을 불러와서 counting 후 Update 시켜야 함
+            -> Update의 정합성을 위해 다른 트랜잭션이 Update시 버전 변경시키고, 만약 SELECT 당시 가져온 버전과 현재 DB에 반영된 버전이 다를 경우 예외 발생시키는 @Version 추가.
+            -> 이 때 트랜잭션을 종료시키는 것이 아니라 최신 버전의 값을 불러와서 counting 후 Update 시켜야 함.
         -> @Retryable 어노테이션 활용(Spring Retry Library)
-            -> Version 차이로 발생한 예외일 경우, 해당 트랜잭션 로직 재시도
-            -> 정상적인 Update 확인
-            -> InSERT는? -> 추가 개선점.(실패)
+            -> Version 차이로 발생한 예외일 경우, 해당 트랜잭션 로직 재시도.
+            -> 정상적인 Update 확인.
 
-추가 해결 사항>
-
-    -> 이후 틈틈히 시간을 할애해서 h2의 테이블 락에 대해 공부하고 적용시킬 예정
-    -> 만약 절차가 복잡하다면, 별도 DB서버를 구현하고 DB 설정으로 테이블 락을 적용할 계획
-    -> 애플리케이션 레벨의 동시성 제어에 대해 자세히 공부하게 된 계기, DB 레벨의 동시성 제어와 락에 대해 좀 더 공부해볼 기회를 제공받은 것 같아서 비록 완전히 해결하진 못했지만 좋은 경험이었다고 생각한다.
+이후 계획: 추가 공부 및 Insert 상황에 대한 처리 필요
+    -> Select 시 Table 자체에 lock을 거는 최적의 방법을 공부하고 적용.
+    -> h2 db table lock에 대해 공부하고 적용.
+    -> 만약 절차가 복잡하다면, 별도 DB서버를 구현하고 DB 설정으로 table lock을 적용.
+    
+느낀점: 애플리케이션 레벨의 동시성 제어에 대해 자세히 공부해볼 계기가 되었고, DB 레벨의 동시성 제어와 락에 대해 깊이있게 이해하고 알게 되어 비록 완전히 해결하진 못했지만 좋은 경험이었다고 생각함.
 
 
 <br/>

@@ -48,7 +48,10 @@
 
 그래서 서버의 인바운드/아웃바운드 규칙과 다른 설정들을 확인했지만 별다른 문제가 없었습니다. 이후 저는 두 가지를 확인하여 이슈 해결 방법을 찾게 되었습니다. 첫 번째는, 기존 As-Is는 JSP에서 Ajax의 getScript 함수를 호출하는 로직을 사용했었고, 두 번째는 인터넷망에서 직접 URL로 접근하여 개발자도구로 디버깅한 결과 Content-type이 'application/json'이 아니라 'application/octet-stream' 인 javascript 코드를 응답해주고 있었습니다. 즉, json 확장자 파일에는 json 방식이 아닌 javascript 코드가 적혀있었고, 기존 ajax에는 javascript를 동적으로 로드하는 getScript 함수를 사용했기 때문에 가능했었습니다.
 
-이를 해결하기 위해 axios 설정 변경 대신 head tag에 script tag를 동적으로 생성하고, src를 연결해서 렌더링 시 호출되게 구현했습니다. 이후, windows 객체에 저장되어있는 기기 목록 변수값을 코드에서 호출하기 위해 전역 인터페이스에 변수 이름을 추가하여 컴파일 타임에 Eslint를 통과시켰고, 테스트 결과 정상 동작했습니다.
+이를 해결하기 위해 axios 설정 변경 대신 head tag에 script tag를 동적으로 생성하고, src를 연결해서 렌더링 시 호출되게 구현했습니다. 이후, windows 객체에 저장되어있는 기기 목록 변수값을 코드에서 호출(하기 위해 전역 인터페이스에 변수 이름을 추가하여 컴파일 타임에 Eslint를 통과시켰고)했고, 테스트 결과 정상 동작했습니다.
+
+그당시엔 잘 몰랐는데, 지금 생각해보면 JSONP(JSON Padding)를 사용해서 script tag 변수에 url을 적용한 후 DOM에 추가시켜 호출했기 때문에 CORS 이슈없이 송수신이 가능하지 않았나 싶습니다.
+(JSONP는 일종의 CORS 우회 방법으로, 서버에 JSONP가 적용되어있어야함. 만약, JSONP가 없다면 대부분의 jquery로 import해오는 것들은 오류가 날 것이다.)
 
 <br/>
 <br/>
